@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"time"
+	_ "time"
 
 	"github.com/aquilabot/PolyFS/internal/cluster"
 	"github.com/aquilabot/PolyFS/internal/fs"
@@ -20,9 +20,9 @@ type GRPCServer struct {
 	pb.UnimplementedFileSystemServer
 	pb.UnimplementedClusterManagementServer
 
-	node    *cluster.Node
-	fs      fs.FileSystem
-	logger  *log.Logger
+	node      *cluster.Node
+	fs        fs.FileSystem
+	logger    *log.Logger
 	chunkSize int
 }
 
@@ -98,7 +98,7 @@ func (s *GRPCServer) PutFile(stream pb.FileSystem_PutFileServer) error {
 func (s *GRPCServer) GetFile(req *pb.GetFileRequest, stream pb.FileSystem_GetFileServer) error {
 	s.logger.Printf("Get file request for %s", req.Path)
 
-	file, info, err := s.fs.Get(req.Path)
+	file, _, err := s.fs.Get(req.Path)
 	if err != nil {
 		var code codes.Code
 		var message string
@@ -135,7 +135,7 @@ func (s *GRPCServer) GetFile(req *pb.GetFileRequest, stream pb.FileSystem_GetFil
 		}
 
 		if err := stream.Send(&pb.GetFileResponse{
-			Chunk:      buffer[:n],
+			Chunk:       buffer[:n],
 			IsLastChunk: false,
 		}); err != nil {
 			return status.Errorf(codes.Internal, "error sending chunk: %v", err)
@@ -144,7 +144,7 @@ func (s *GRPCServer) GetFile(req *pb.GetFileRequest, stream pb.FileSystem_GetFil
 
 	// Send the final chunk marker
 	return stream.Send(&pb.GetFileResponse{
-		Chunk:      []byte{},
+		Chunk:       []byte{},
 		IsLastChunk: true,
 	})
 }
@@ -203,11 +203,11 @@ func (s *GRPCServer) ListFiles(ctx context.Context, req *pb.ListFilesRequest) (*
 
 	for _, file := range files {
 		info := &pb.FileInfo{
-			Path:       file.Path,
+			Path:        file.Path,
 			IsDirectory: file.Mode == fs.FileDirectory,
-			Size:       file.Size,
-			Timestamp:  file.Timestamp.Unix(),
-			Attributes: file.Attrs,
+			Size:        file.Size,
+			Timestamp:   file.Timestamp.Unix(),
+			Attributes:  file.Attrs,
 		}
 		response.Files = append(response.Files, info)
 	}
@@ -239,8 +239,8 @@ func (s *GRPCServer) RemoveDirectory(ctx context.Context, req *pb.RemoveDirector
 	s.logger.Printf("Remove directory request for %s (recursive: %v)", req.Path, req.Recursive)
 
 	cmd := cluster.FSCommand{
-		Type:     "rmdir",
-		Path:     req.Path,
+		Type:      "rmdir",
+		Path:      req.Path,
 		Recursive: req.Recursive,
 	}
 
@@ -289,11 +289,11 @@ func (s *GRPCServer) JoinCluster(ctx context.Context, req *pb.JoinRequest) (*pb.
 	}
 
 	return &pb.JoinResponse{
-		Success:  true,
+		Success:   true,
 		ClusterId: "polyfs-cluster", // Hard-coded for now
-		LeaderId: "", // TODO: Get the leader ID
-		Message:  "Successfully joined cluster",
-		Nodes:    pbNodes,
+		LeaderId:  "",               // TODO: Get the leader ID
+		Message:   "Successfully joined cluster",
+		Nodes:     pbNodes,
 	}, nil
 }
 
@@ -352,9 +352,9 @@ func (s *GRPCServer) GetClusterStatus(ctx context.Context, req *pb.StatusRequest
 
 	return &pb.StatusResponse{
 		ClusterId: "polyfs-cluster", // Hard-coded for now
-		LeaderId:  "", // TODO: Get the leader ID
+		LeaderId:  "",               // TODO: Get the leader ID
 		NodeCount: int32(len(nodes)),
 		Nodes:     pbNodes,
 		Metrics:   metrics,
 	}, nil
-} 
+}

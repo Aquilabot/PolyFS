@@ -32,7 +32,6 @@ func (f *FSM) Apply(logEntry *raft.Log) interface{} {
 
 	f.log.Printf("Applying command: %s on path %s", command.Type, command.Path)
 
-	var response interface{}
 	var err error
 
 	switch command.Type {

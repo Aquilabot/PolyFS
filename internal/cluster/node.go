@@ -235,7 +235,7 @@ func (n *Node) Join(leaderAddr string) error {
 	
 	// Read response
 	resp := make([]byte, 1024)
-	n, err := conn.Read(resp)
+	bytesRead, err := conn.Read(resp)
 	if err != nil {
 		if err == io.EOF {
 			return fmt.Errorf("connection closed unexpectedly")
@@ -248,7 +248,7 @@ func (n *Node) Join(leaderAddr string) error {
 		Message string `json:"message"`
 	}
 	
-	if err := json.Unmarshal(resp[:n], &response); err != nil {
+	if err := json.Unmarshal(resp[:bytesRead], &response); err != nil {
 		return fmt.Errorf("failed to unmarshal response: %v", err)
 	}
 	

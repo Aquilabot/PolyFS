@@ -13,16 +13,16 @@ import (
 
 // LocalFS implements the fs.FileSystem interface using local storage
 type LocalFS struct {
-	rootDir    string
-	metaDir    string
-	mu         sync.RWMutex
+	rootDir string
+	metaDir string
+	mu      sync.RWMutex
 }
 
 // NewLocalFS creates a new local file system backend
 func NewLocalFS(rootDir string) (*LocalFS, error) {
 	// Ensure required directories exist
 	metaDir := filepath.Join(rootDir, ".metadata")
-	
+
 	for _, dir := range []string{rootDir, metaDir} {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return nil, err
@@ -81,8 +81,8 @@ func (l *LocalFS) Put(path string, reader io.Reader, attrs map[string]string) er
 	// Create and store metadata
 	info := fs.FileInfo{
 		Path:      path,
-		Size:      uint64(written),
-		Mode:      fs.FileRegular,
+		FileSize:  uint64(written),
+		Type:      fs.FileRegular,
 		Timestamp: time.Now(),
 		Attrs:     attrs,
 	}
@@ -156,7 +156,7 @@ func (l *LocalFS) MakeDir(path string) error {
 	defer l.mu.Unlock()
 
 	dirPath := l.dataPath(path)
-	
+
 	// Check if directory already exists
 	info, err := os.Stat(dirPath)
 	if err == nil {
@@ -186,15 +186,8 @@ func (l *LocalFS) MakeDir(path string) error {
 	}
 
 	// Create and store directory metadata
-	info := fs.FileInfo{
-		Path:      path,
-		Size:      0,
-		Mode:      fs.FileDirectory,
-		Timestamp: time.Now(),
-		Attrs:     make(map[string]string),
-	}
-
-	return l.saveMetadata(path, &info)
+	fileInfo := fs.FromOSFileInfo(path, info)
+	return l.saveMetadata(path, &fileInfo)
 }
 
 // RemoveDir removes a directory
@@ -203,7 +196,7 @@ func (l *LocalFS) RemoveDir(path string, recursive bool) error {
 	defer l.mu.Unlock()
 
 	dirPath := l.dataPath(path)
-	
+
 	// Check if directory exists
 	info, err := os.Stat(dirPath)
 	if err != nil {
@@ -218,7 +211,7 @@ func (l *LocalFS) RemoveDir(path string, recursive bool) error {
 			Message: "failed to stat directory: " + err.Error(),
 		}
 	}
-	
+
 	if !info.IsDir() {
 		return &fs.FileSystemError{
 			Code:    fs.ErrInvalidArgument,
@@ -264,7 +257,7 @@ func (l *LocalFS) List(dir string, recursive bool) ([]fs.FileInfo, error) {
 	defer l.mu.RUnlock()
 
 	dirPath := l.dataPath(dir)
-	
+
 	// Check if directory exists
 	info, err := os.Stat(dirPath)
 	if err != nil {
@@ -279,7 +272,7 @@ func (l *LocalFS) List(dir string, recursive bool) ([]fs.FileInfo, error) {
 			Message: "failed to stat directory: " + err.Error(),
 		}
 	}
-	
+
 	if !info.IsDir() {
 		return nil, &fs.FileSystemError{
 			Code:    fs.ErrInvalidArgument,
@@ -293,58 +286,48 @@ func (l *LocalFS) List(dir string, recursive bool) ([]fs.FileInfo, error) {
 		if err != nil {
 			return err
 		}
-		
+
 		// Skip the metadata directory
 		if filepath.HasPrefix(path, l.metaDir) {
 			return filepath.SkipDir
 		}
-		
+
 		// Skip the root directory itself
 		if path == dirPath {
 			return nil
 		}
-		
+
 		// Get relative path from root dir
 		relPath, err := filepath.Rel(l.rootDir, path)
 		if err != nil {
 			return err
 		}
-		
+
 		// Get file metadata if available
 		fileInfo, err := l.getMetadata(relPath)
 		if err != nil {
 			// If metadata not found, create a basic FileInfo
-			mode := fs.FileRegular
-			if info.IsDir() {
-				mode = fs.FileDirectory
-			}
-			
-			fileInfo = &fs.FileInfo{
-				Path:      relPath,
-				Size:      uint64(info.Size()),
-				Mode:      mode,
-				Timestamp: info.ModTime(),
-				Attrs:     make(map[string]string),
-			}
+			convertedInfo := fs.FromOSFileInfo(relPath, info)
+			fileInfo = &convertedInfo
 		}
-		
+
 		result = append(result, *fileInfo)
-		
+
 		// Skip directory traversal if not recursive
 		if !recursive && info.IsDir() && path != dirPath {
 			return filepath.SkipDir
 		}
-		
+
 		return nil
 	}
-	
+
 	if err := filepath.Walk(dirPath, walkFn); err != nil {
 		return nil, &fs.FileSystemError{
 			Code:    fs.ErrInternalError,
 			Message: "failed to list directory: " + err.Error(),
 		}
 	}
-	
+
 	return result, nil
 }
 
@@ -393,8 +376,8 @@ func (l *LocalFS) getMetadata(path string) (*fs.FileInfo, error) {
 					}
 				}
 			}
-			
-			// Data file exists but metadata is missing
+
+			// Data file exists, but metadata is missing
 			// Create a basic FileInfo from file stats
 			info, err := os.Stat(l.dataPath(path))
 			if err != nil {
@@ -403,19 +386,9 @@ func (l *LocalFS) getMetadata(path string) (*fs.FileInfo, error) {
 					Message: "failed to stat file: " + err.Error(),
 				}
 			}
-			
-			mode := fs.FileRegular
-			if info.IsDir() {
-				mode = fs.FileDirectory
-			}
-			
-			return &fs.FileInfo{
-				Path:      path,
-				Size:      uint64(info.Size()),
-				Mode:      mode,
-				Timestamp: info.ModTime(),
-				Attrs:     make(map[string]string),
-			}, nil
+
+			fileInfo := fs.FromOSFileInfo(path, info)
+			return &fileInfo, nil
 		}
 		return nil, &fs.FileSystemError{
 			Code:    fs.ErrInternalError,
@@ -432,4 +405,4 @@ func (l *LocalFS) getMetadata(path string) (*fs.FileInfo, error) {
 	}
 
 	return &info, nil
-} 
+}
