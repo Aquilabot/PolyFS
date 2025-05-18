@@ -1,0 +1,160 @@
+syntax = "proto3";
+
+package polyfs;
+
+option go_package = "github.com/aquilabot/PolyFS/proto";
+
+// Servicio principal para operaciones del sistema de archivos
+service FileSystem {
+  // Operaciones de archivos
+  rpc PutFile(stream PutFileRequest) returns (PutFileResponse);
+  rpc GetFile(GetFileRequest) returns (stream GetFileResponse);
+  rpc DeleteFile(DeleteFileRequest) returns (DeleteFileResponse);
+  rpc ListFiles(ListFilesRequest) returns (ListFilesResponse);
+  
+  // Operaciones de directorios
+  rpc MakeDirectory(MakeDirectoryRequest) returns (MakeDirectoryResponse);
+  rpc RemoveDirectory(RemoveDirectoryRequest) returns (RemoveDirectoryResponse);
+}
+
+// Servicio para la gestión de nodos en el cluster
+service ClusterManagement {
+  rpc JoinCluster(JoinRequest) returns (JoinResponse);
+  rpc LeaveCluster(LeaveRequest) returns (LeaveResponse);
+  rpc GetClusterStatus(StatusRequest) returns (StatusResponse);
+}
+
+// Mensajes para operaciones de archivos
+
+message PutFileRequest {
+  oneof data {
+    FileMetadata metadata = 1;
+    bytes chunk = 2;
+  }
+}
+
+message FileMetadata {
+  string path = 1;
+  uint64 size = 2;
+  int64 timestamp = 3;
+  map<string, string> attributes = 4;
+}
+
+message PutFileResponse {
+  string id = 1;
+  bool success = 2;
+  string message = 3;
+}
+
+message GetFileRequest {
+  string path = 1;
+}
+
+message GetFileResponse {
+  bytes chunk = 1;
+  bool is_last_chunk = 2;
+}
+
+message DeleteFileRequest {
+  string path = 1;
+}
+
+message DeleteFileResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ListFilesRequest {
+  string directory = 1;
+  bool recursive = 2;
+}
+
+message ListFilesResponse {
+  repeated FileInfo files = 1;
+}
+
+message FileInfo {
+  string path = 1;
+  bool is_directory = 2;
+  uint64 size = 3;
+  int64 timestamp = 4;
+  map<string, string> attributes = 5;
+}
+
+// Mensajes para operaciones de directorios
+
+message MakeDirectoryRequest {
+  string path = 1;
+}
+
+message MakeDirectoryResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message RemoveDirectoryRequest {
+  string path = 1;
+  bool recursive = 2;
+}
+
+message RemoveDirectoryResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// Mensajes para gestión del cluster
+
+message JoinRequest {
+  string node_id = 1;
+  string address = 2;
+}
+
+message JoinResponse {
+  bool success = 1;
+  string cluster_id = 2;
+  string leader_id = 3;
+  string message = 4;
+  repeated NodeInfo nodes = 5;
+}
+
+message LeaveRequest {
+  string node_id = 1;
+}
+
+message LeaveResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message StatusRequest {
+  bool include_metrics = 1;
+}
+
+message StatusResponse {
+  string cluster_id = 1;
+  string leader_id = 2;
+  int32 node_count = 3;
+  repeated NodeInfo nodes = 4;
+  ClusterMetrics metrics = 5;
+}
+
+message NodeInfo {
+  string node_id = 1;
+  string address = 2;
+  NodeState state = 3;
+  bool is_leader = 4;
+}
+
+message ClusterMetrics {
+  int64 total_storage = 1;
+  int64 used_storage = 2;
+  int64 operation_count = 3;
+}
+
+enum NodeState {
+  UNKNOWN = 0;
+  HEALTHY = 1;
+  SYNCING = 2;
+  DEGRADED = 3;
+  OFFLINE = 4;
+} 
